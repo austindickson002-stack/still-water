@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Still Water</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:ital,wght@0,400;0,500;0,600;0,700;1,600;1,700;1,800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: quiet, cinematic evening on a lake; the HUD stays out of the way
+   IDEA: a realistic first-person fishing sim with a tackle readout like a reel's drag dial
+   PICTURE: the full-screen 3D lake; panels are smoked glass over it
+   COLOUR and TYPE: white text on smoked glass, float-orange accent #ff6a2b; Barlow Semi Condensed
+   LAYOUT: stats top-left, buttons top-right, tackle panel bottom-right, hints bottom-centre, catch card right */
+:root{color-scheme:dark;--glass:rgba(12,16,18,.52);--line:rgba(255,255,255,.14);--ink:#f4f1ea;--dim:rgba(244,241,234,.66);--acc:#ff6a2b;--ok:#7fd18b;--warn:#ffc34d;--bad:#ff5a4e}
+:root[data-theme=light],:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;overflow:hidden;background:#11161a;color:var(--ink);font:16px/1.4 "Barlow Semi Condensed",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+button{font:inherit;color:inherit}
+.glass{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.65)}
+#hud[hidden]{display:none}
+#hud svg{width:18px;height:18px;flex:none}
+#info{position:absolute;top:16px;left:18px;display:grid;gap:3px;font-size:15px}
+#info .i1{display:flex;align-items:baseline;gap:10px}
+#info .i1 b{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+#info .i1 span{color:var(--dim)}#info .i1 i{font-style:normal;color:var(--ink)}
+#info .i2,#info .i3{display:flex;align-items:center;gap:6px;color:var(--dim)}
+#info .i2 span{margin-right:8px;color:var(--ink)}
+#info .i3 b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+#goals{position:absolute;top:150px;left:18px;width:270px;pointer-events:auto}
+#gHead{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;border-bottom:2px solid rgba(255,255,255,.75);padding:0 0 6px;cursor:pointer;font-weight:600;font-size:17px;text-shadow:inherit}
+#gHead i{font-style:normal;color:var(--dim)}
+#gList{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:7px}
+#gList li{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:8px;align-items:start;font-size:15px;line-height:1.25}
+#gList li::before{content:"";width:0;height:0;margin-top:5px;border:5px solid transparent;border-left:7px solid #f2c94c;border-right:0}
+#gList li b{font-weight:600;color:#f2c94c;font-variant-numeric:tabular-nums}
+#gList li.done{opacity:.55}#gList li.done span{text-decoration:line-through}
+#goals.min #gList{display:none}
+#compass{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:min(40vw,420px);height:30px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent)}
+#compass::before{content:"";position:absolute;left:0;right:0;top:22px;height:1px;background:rgba(255,255,255,.55)}
+#cStrip{position:absolute;top:0;left:50%;height:100%;white-space:nowrap}
+#cStrip span{position:absolute;top:2px;transform:translateX(-50%);font-size:13px;font-weight:600}
+#cStrip i{position:absolute;top:17px;width:1px;height:5px;background:rgba(255,255,255,.6)}
+#compass b{position:absolute;left:50%;top:18px;width:2px;height:10px;margin-left:-1px;background:#fff}
+#cMark{position:absolute;top:22px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--acc);display:none}
+#topBtns{position:absolute;top:14px;right:16px;display:flex;gap:6px;pointer-events:auto}
+#topBtns button{min-height:36px;padding:0 12px;border-radius:18px;border:1px solid rgba(255,255,255,.22);background:rgba(10,14,16,.35);font-weight:600;font-size:14px;cursor:pointer;text-shadow:inherit}
+#topBtns button:hover{background:rgba(10,14,16,.6)}
+#bait{position:absolute;top:60px;right:18px;display:flex;align-items:center;gap:12px}
+#bait .bt{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+#bait .bt b{font-size:17px;font-weight:600}#bait .bt span{font-size:13px;color:var(--dim)}
+#bait .bc{position:relative;width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,255,255,.85);background:radial-gradient(circle,rgba(10,14,16,.25),rgba(10,14,16,.55));display:grid;place-items:center}
+#hud #bait .bc svg{width:44px;height:44px}
+#bait .bc i{position:absolute;top:-6px;right:-8px;min-width:30px;height:30px;padding:0 6px;border-radius:15px;border:2px solid rgba(255,255,255,.85);background:rgba(10,14,16,.6);font-style:normal;font-weight:600;font-size:14px;display:grid;place-items:center}
+#floatW{position:absolute;top:150px;right:18px;width:92px;display:flex;flex-direction:column;align-items:center;gap:2px;opacity:0;transition:opacity .25s}
+#floatW.on{opacity:1}
+#fwLab{font-size:18px;font-weight:700;letter-spacing:.3px}
+#fwLab.strike{color:#ff5a3a;animation:pulse .5s ease-in-out infinite alternate}
+#fwLab.net{color:#7fe08f}
+@keyframes pulse{to{transform:scale(1.18)}}
+.fw{position:relative;width:92px;height:104px;overflow:hidden}
+.fw .water{position:absolute;left:0;right:0;top:58px;bottom:0;background:linear-gradient(rgba(40,90,110,.55),rgba(10,30,40,.25));border-radius:0 0 8px 8px}
+.fw .wl{position:absolute;left:0;right:0;top:57px;height:2px;background:#f2d24c;box-shadow:0 0 8px #f2d24c}
+.fw .wl::before,.fw .wl::after{content:"";position:absolute;top:-3px;width:8px;height:8px;border-radius:50%;background:#f2d24c}
+.fw .wl::before{left:-2px}.fw .wl::after{right:-2px}
+#hud #fwBob{position:absolute;left:50%;top:4px;width:30px;height:80px;margin-left:-15px;transition:transform .08s linear;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+#stamW{width:92px;font-size:12px;color:var(--dim);display:none}
+#stamW.on{display:block}
+.sbar{height:5px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden;margin-top:2px}
+#stamI{display:block;height:100%;width:100%;background:#9fd3ff;transition:width .15s}
+#tens{position:absolute;right:24px;top:max(290px,38vh);bottom:120px;min-height:150px;display:flex;gap:10px;align-items:stretch;opacity:0;transition:opacity .25s}
+#tens.on{opacity:1}
+.gauges{display:flex;flex-direction:column;justify-content:space-between;padding:4px 0}
+.g{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--dim)}
+.g svg{width:22px!important;height:22px!important;padding:7px;box-sizing:content-box;border-radius:50%;border:2px solid rgba(255,255,255,.75);background:rgba(10,14,16,.35);color:#fff;transition:border-color .15s,color .15s}
+.g.warn svg{border-color:#f2c94c;color:#f2c94c}.g.bad svg{border-color:#ff5a4e;color:#ff5a4e}
+.tcol{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--dim)}
+.tcol b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+.tbar{position:relative;flex:1;width:26px;border:2px solid rgba(255,255,255,.85);border-radius:3px;background:rgba(10,14,16,.35);overflow:hidden}
+.tbar::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to top,transparent 0 9px,rgba(255,255,255,.14) 9px 10px)}
+#tFill{position:absolute;left:0;right:0;bottom:0;height:0;background:#4fc36a;transition:height .08s linear,background-color .2s}
+.tbar::after{content:"";position:absolute;left:0;right:0;top:0;height:18%;background:rgba(255,75,62,.22);pointer-events:none}
+#tDrag{position:absolute;left:-2px;right:-2px;height:3px;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.8)}
+#slip{position:absolute;right:76px;top:270px;font-size:15px;font-weight:700;color:#f2c94c;opacity:0;transition:opacity .15s}
+#slip.on{opacity:1}
+#lineOut{position:absolute;right:104px;bottom:24px;text-align:right;opacity:0;transition:opacity .25s}
+#lineOut.on{opacity:1}
+#lineOut b{font-size:56px;font-weight:600;line-height:.9;font-variant-numeric:tabular-nums}
+#lineOut span{font-size:22px;margin-left:6px}
+#lineOut small{display:block;font-size:14px;color:var(--dim)}#lineOut small i{font-style:normal;color:var(--ink)}
+#dragDial{position:absolute;right:18px;bottom:24px;width:76px;height:76px;padding:0;border:0;background:none;pointer-events:auto;cursor:ns-resize;display:grid;place-items:center;text-shadow:inherit}
+#dragDial svg{position:absolute;inset:0;width:76px!important;height:76px!important}
+#dragDial b{position:relative;font-size:18px;font-weight:700;line-height:1;margin-top:8px}
+#dragDial small{position:relative;font-size:11px;color:var(--dim);margin-top:-14px}
+#dArc{transition:stroke-dasharray .15s}
+#msg{position:absolute;left:50%;top:20%;transform:translate(-50%,8px);font-size:28px;font-weight:600;text-align:center;opacity:0;transition:opacity .35s,transform .35s;width:min(86vw,640px);text-wrap:balance}
+#msg.on{opacity:1;transform:translate(-50%,0)}
+#keys{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font-size:15px;color:var(--dim);white-space:nowrap}
+#keys b{color:var(--ink);font-weight:600}
+#pow{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);width:min(64vw,340px);display:grid;grid-template-columns:auto minmax(0,1fr) 46px;align-items:center;gap:10px;opacity:0;transition:opacity .2s;font-size:14px}
+#pow.on{opacity:1}
+#pow .bar{height:8px;border-radius:4px;background:rgba(10,14,16,.5);overflow:hidden;border:1px solid rgba(255,255,255,.35)}
+#powI{display:block;height:100%;width:0;background:linear-gradient(90deg,#4fc36a,#f2c94c 70%,#ff8a3d)}
+#pow b{text-align:right;font-variant-numeric:tabular-nums}
+#touch{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:118px;display:grid;grid-template-columns:auto auto;gap:10px;align-items:end;justify-items:end;pointer-events:auto}
+#touch[hidden]{display:none}
+#touch button{min-width:54px;min-height:46px;border-radius:23px;padding:0 14px;border:1px solid rgba(255,255,255,.3);background:rgba(10,14,16,.45);font-weight:600;font-size:15px;color:#fff}
+#touch button.on{border-color:var(--acc);color:var(--acc)}
+#touch .dr{display:flex;gap:6px}#touch .dr button{min-width:46px;padding:0}
+#tAct{grid-column:2;width:96px;height:96px;border-radius:50%!important;background:rgba(255,106,43,.82)!important;border:2px solid rgba(255,255,255,.7)!important;font-size:17px!important}
+#tNet{display:none}#tNet.on{display:block;background:rgba(79,195,106,.8)!important}
+#touch:not(.fight) #tLift,#touch:not(.fight) .dr{visibility:hidden}
+#rotate{display:none}
+#tH{display:none}
+@media (max-width:760px),(max-height:500px){
+ #info{top:8px;left:12px;font-size:13px;gap:1px}#info .i1 b{font-size:19px}#info .i2{display:none}
+ #goals{top:70px;left:12px;width:200px}#gList li{font-size:13px}#gHead{font-size:14px;padding-bottom:4px}
+ #compass{top:4px;width:32vw;height:26px}
+ #topBtns{top:6px;right:8px}#topBtns button{min-height:32px;font-size:13px;padding:0 10px}
+ #bait{display:none}
+ #floatW{top:46px;right:6px;transform:scale(.78);transform-origin:top right}
+ #tens{display:none}
+ #tH{position:absolute;top:34px;left:50%;transform:translateX(-50%);width:36vw;display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .25s}
+ #tH.on{opacity:1}
+ #tH .hb{position:relative;flex:1;height:12px;border:2px solid rgba(255,255,255,.85);border-radius:3px;background:rgba(10,14,16,.35);overflow:hidden}
+ #tHf{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#4fc36a 0%,#4fc36a 55%,#f2c94c 70%,#ff8a3d 84%,#ff4b3e 100%);background-size:var(--tw,200px) 100%}
+ #tHd{position:absolute;top:-2px;bottom:-2px;width:3px;background:#fff}
+ #tH b{font-size:13px;font-variant-numeric:tabular-nums;min-width:48px}
+ #slip{right:auto;left:50%;transform:translateX(-50%);top:56px;font-size:13px}
+ #lineOut{right:auto;left:14px;bottom:12px;text-align:left}#lineOut b{font-size:34px}#lineOut span{font-size:15px}#lineOut small{font-size:12px}
+ #dragDial{display:none}
+ #msg{font-size:19px;top:22%}
+ #keys{display:none}
+ #pow{bottom:16px;width:44vw}
+ #touch{right:12px;bottom:12px;grid-template-columns:auto auto auto;gap:8px}
+ #touch #tNet{grid-column:1;grid-row:1}#touch #tZoom{grid-column:2;grid-row:1}#touch #tLift{grid-column:3;grid-row:1}
+ #touch .dr{grid-column:1/3;grid-row:2;justify-self:end}
+ #tAct{grid-column:3!important;grid-row:2;width:88px!important;height:88px!important}
+}
+@media (orientation:portrait) and (pointer:coarse){#rotate{display:grid;place-items:center;position:fixed;inset:0;background:rgba(6,9,11,.85);font-size:22px;font-weight:600;padding:30px;text-align:center;pointer-events:auto;z-index:9}}
+/* screens */
+.ovl{position:fixed;inset:0;z-index:5;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(6,9,11,.45)}
+.ovl.on{display:flex}
+.card{width:min(100%,520px);max-height:88vh;overflow:auto;padding:22px 24px;background:rgba(14,18,21,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px}
+.card h2{margin:0 0 4px;font-size:32px;line-height:1.05;font-weight:700}
+.card p{margin:0 0 14px;color:var(--dim)}
+.btn{min-height:46px;padding:0 22px;border-radius:10px;border:0;background:var(--acc);color:#1a0d06;font-weight:700;font-size:17px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+#start{background:linear-gradient(90deg,rgba(6,9,11,.82),rgba(6,9,11,.35) 60%,rgba(6,9,11,0));justify-content:flex-start;padding-left:max(6vw,20px)}
+#start .in{width:min(100%,460px)}
+#start h1{font-size:clamp(44px,7vw,72px);line-height:.95;margin:0 0 10px;font-weight:700;letter-spacing:.5px}
+#start .sub{color:var(--dim);font-size:19px;margin:0 0 22px;max-width:40ch}
+.ctl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;margin:0 0 24px;font-size:16px}
+.ctl kbd{font:600 14px/1 "Barlow Semi Condensed",sans-serif;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:rgba(255,255,255,.06);white-space:nowrap;justify-self:start}
+.ctl span{color:var(--dim)}
+#catch{position:fixed;right:max(4vw,16px);top:50%;transform:translate(30px,-50%);z-index:4;width:min(88vw,320px);padding:20px;opacity:0;pointer-events:none;transition:opacity .4s,transform .4s}
+#catch.on{opacity:1;transform:translate(0,-50%);pointer-events:auto}
+#catch.left{right:auto;left:max(4vw,16px)}
+#goals.hideH{opacity:0;pointer-events:none}
+.tag{display:inline-block;font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.12)}
+.tag.hot{background:var(--acc);color:#1a0d06}
+#cName{font-size:34px;line-height:1.05;margin:8px 0 12px;font-weight:700;text-wrap:balance}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:6px}
+.stats div{display:flex;flex-direction:column}.stats span{font-size:12px;color:var(--dim)}.stats b{font-size:20px;white-space:nowrap}
+#cHint{font-size:14px;color:var(--dim);margin:6px 0 16px}
+.acts{display:flex;gap:8px}.acts .btn{flex:1}
+#logGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:14px 0 18px}
+.sp{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--dim)}
+.sp b{font-size:17px;color:var(--ink)}
+.sp canvas{width:100%;height:auto;aspect-ratio:256/96}
+.sp .sil{aspect-ratio:256/96;border-radius:50%/40%;background:rgba(255,255,255,.07);margin:0 6% 0}
+.set{display:grid;gap:14px;margin:16px 0 20px}
+.set label{display:grid;gap:6px;font-size:15px}
+.set input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+.set select{min-height:44px;border-radius:8px;background:#1b2227;color:var(--ink);border:1px solid var(--line);padding:0 10px;font:inherit}
+#qNote{font-size:13px;color:var(--dim)}
+#err,#loading{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;padding:18px 22px;max-width:90vw;border-radius:12px;background:rgba(14,18,21,.9);border:1px solid var(--line)}
+#err[hidden],#loading[hidden]{display:none}
+@media (max-width:600px){#cName{font-size:28px}#catch{top:auto;bottom:16px;transform:translate(0,30px)}#catch.on{transform:none}#start{background:rgba(6,9,11,.7)}}
+
+/* ============ screens ============ */
+.scr{position:fixed;inset:0;z-index:4;display:none}
+.scr.on{display:block}
+.art{position:absolute;inset:0;transition:opacity .6s}
+.art.hide{opacity:0}
+.disp{font-family:"Barlow Semi Condensed",sans-serif;font-style:italic;font-weight:800}
+/* loading */
+#load{z-index:8;background:#0b1015}
+.ldShade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,9,12,.92) 0%,rgba(6,9,12,.7) 45%,rgba(6,9,12,.25) 100%)}
+.ldIn{position:absolute;left:max(7vw,24px);bottom:max(10vh,40px);width:min(86vw,560px)}
+.logoS{display:block;font-style:italic;font-weight:800;letter-spacing:1px;font-size:20px;opacity:.85;margin-bottom:28px}
+.ldRegion{display:block;font-size:14px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#ffcf9e}
+#ldName{font-style:italic;font-weight:800;font-size:clamp(48px,8vw,92px);line-height:.95;margin:6px 0 12px;text-wrap:balance}
+#ldDesc{font-size:18px;color:var(--dim);margin:0 0 6px;max-width:48ch}
+.ldRod{font-size:15px;font-weight:600;margin:0 0 24px}
+.ldBarW{height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+#ldBar{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff8a3d,#ffd08a);transition:width .2s}
+.ldRow{display:flex;justify-content:space-between;margin-top:8px;font-size:15px;color:var(--dim)}
+.ldRow b{color:var(--ink);font-variant-numeric:tabular-nums}
+.ldTip{margin-top:26px;font-size:15px;color:var(--dim);display:flex;gap:10px;max-width:52ch}
+.ldTip b{color:#ffcf9e;font-weight:700}
+/* home */
+#home{z-index:3;pointer-events:none}
+#home button,#home input{pointer-events:auto}
+.hmShadeL{position:absolute;inset:0 auto 0 0;width:min(60vw,760px);background:linear-gradient(90deg,rgba(8,12,16,.72),rgba(8,12,16,.35) 65%,rgba(8,12,16,0))}
+.hmShadeR{position:absolute;inset:0 0 0 auto;width:min(45vw,560px);background:linear-gradient(270deg,rgba(8,12,16,.5),rgba(8,12,16,0))}
+.logo{position:absolute;top:34px;left:max(4vw,24px);display:flex;flex-direction:column}
+.logo b{font-style:italic;font-weight:800;font-size:clamp(44px,5.6vw,76px);line-height:.9;letter-spacing:.5px;text-shadow:0 4px 18px rgba(0,0,0,.4)}
+.logo .swoosh{display:block;height:6px;width:86%;margin:4px 0 8px;border-radius:3px;background:linear-gradient(90deg,#ff6a2b,#ffb36b 60%,rgba(255,179,107,0));transform:skewX(-20deg)}
+.logo span{font-size:14px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,.8)}
+.hmRight{position:absolute;top:30px;right:max(3vw,20px);display:flex;gap:10px}
+.coins{display:flex;align-items:center;gap:10px;height:56px;padding:0 10px 0 14px;border-radius:12px;background:#f4f2ee;color:#17202a}
+.coins svg{width:26px;height:26px}.coins b{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;min-width:20px}
+.coins button{width:34px;height:34px;border-radius:9px;border:0;background:#17202a;color:#fff;font-size:20px;font-weight:700;cursor:pointer}
+#hmGear{width:56px;height:56px;border-radius:12px;border:0;background:#e9edf1;color:#17202a;display:grid;place-items:center;cursor:pointer}
+#hmGear svg{width:28px;height:28px}
+.badge{position:absolute;top:100px;right:max(3vw,20px);display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.badge .av{position:absolute;right:calc(100% - 56px);top:8px;width:36px;height:36px;border-radius:50%;background:#ffb02e;color:#17202a;display:grid;place-items:center;font-weight:800;font-style:italic;z-index:1;pointer-events:none}
+.badge b,.badge input{min-width:200px;height:52px;padding:0 22px 0 58px;border-radius:26px;background:#17283d;border:2px solid rgba(255,255,255,.25);font:italic 800 24px "Barlow Semi Condensed",sans-serif;color:#fff;display:flex;align-items:center;justify-content:flex-end;cursor:pointer;pointer-events:auto}
+.badge b[hidden]{display:none}
+.badge input{outline:none;text-align:right}
+.badge input[hidden]{display:none}
+.badge small{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.hmNav{position:absolute;top:calc(34px + clamp(44px,5.6vw,76px) + 52px);left:max(4vw,24px);right:calc(max(3vw,20px) + 270px);display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center}
+.hmNav button{display:flex;align-items:center;gap:6px;height:40px;padding:0 4px;border:0;background:none;font:600 18px "Barlow Semi Condensed",sans-serif;color:rgba(255,255,255,.88);cursor:pointer;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.hmNav button svg{width:20px;height:20px}
+.hmNav button:hover{color:#fff}
+.hmNav button.on{padding:0 18px 0 14px;color:#13202c;background:#fff;clip-path:polygon(4% 8%,100% 0,97% 92%,0 100%);text-shadow:none;font-style:italic;font-weight:800}
+.hmLeft{position:absolute;left:max(4vw,24px);top:calc(34px + clamp(44px,5.6vw,76px) + 120px);bottom:28px;width:min(44vw,520px);display:flex;flex-direction:column}
+.brush{align-self:flex-start;margin:0;padding:6px 34px 8px 22px;font:italic 800 clamp(34px,4vw,54px)/1 "Barlow Semi Condensed",sans-serif;color:#13202c;background:#fff;clip-path:polygon(2% 14%,96% 0,100% 30%,98% 86%,6% 100%,0 60%)}
+.kick{margin:10px 0 18px 26px;font-size:14px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.85)}
+.modes{list-style:none;margin:0 0 auto;padding:0 0 0 24px;display:grid;gap:4px}
+.modes li,.modes button{font:italic 800 clamp(26px,2.6vw,36px)/1.15 "Barlow Semi Condensed",sans-serif;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+.modes button{background:none;border:0;padding:0;cursor:pointer;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:10px}
+.modes em{font:600 12px "Barlow Semi Condensed",sans-serif;letter-spacing:1.5px;text-transform:uppercase;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.4)}
+.modes li.on::after{content:"";display:inline-block;width:9px;height:9px;margin-left:10px;border-radius:50%;background:#4fd36a;box-shadow:0 0 10px #4fd36a;vertical-align:middle}
+.today{margin-top:18px;padding:14px 18px;border-radius:14px;background:rgba(14,22,32,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12)}
+.tdHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.tdHead b{font-style:italic;font-weight:800;letter-spacing:2px;text-transform:uppercase;font-size:15px}
+.tdHead span{font-size:13px;color:var(--dim);display:flex;align-items:center;gap:6px}.tdHead span i{font-style:normal}
+.dot{width:8px;height:8px;border-radius:50%;background:#4fd36a}
+.tdRow{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.08);font-size:13px}
+.tdRow>span{letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);font-size:12px;font-weight:600}
+.tdRow b{font-style:italic;font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tdRow em{font-style:normal;display:flex;align-items:center;gap:8px;color:var(--dim);font-variant-numeric:tabular-nums}
+.tdRow .bar{display:block;width:70px;height:3px;border-radius:2px;background:rgba(255,255,255,.2);overflow:hidden}
+#tdGoalsBar{display:block;height:100%;background:#fff;width:0}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.pills button{min-height:40px;padding:0 16px;border-radius:20px;border:1px solid rgba(255,255,255,.18);background:rgba(14,22,32,.62);font:italic 700 15px "Barlow Semi Condensed",sans-serif;color:#fff;cursor:pointer}
+.pills button:hover{background:rgba(30,44,60,.8)}
+.hmMapBox{position:absolute;right:max(3vw,20px);bottom:28px;width:min(34vw,420px);display:flex;flex-direction:column;gap:12px}
+.hmMapBox .lbl{font:italic 800 15px "Barlow Semi Condensed",sans-serif;letter-spacing:2px;text-transform:uppercase}
+.mapCard{position:relative;height:190px;border-radius:16px;overflow:hidden;border:2px solid rgba(255,255,255,.85);padding:0;cursor:pointer;text-align:left;box-shadow:0 12px 40px rgba(0,0,0,.35);transition:transform .2s}
+.mapCard:hover{transform:translateY(-3px)}
+.mapCard .art{inset:0}
+.mapCard .art::after,#ldArt::after,#mpArt::after{content:"";position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200' preserveAspectRatio='none'%3E%3Cpath d='M0 120 L60 80 L110 105 L170 55 L230 100 L290 70 L350 98 L400 85 L400 200 L0 200Z' fill='%23000' opacity='.28'/%3E%3Cpath d='M0 140 L40 125 L90 135 L150 118 L210 132 L270 120 L330 134 L400 126 L400 200 L0 200Z' fill='%23000' opacity='.3'/%3E%3Crect y='150' width='400' height='50' fill='%23fff' opacity='.08'/%3E%3C/svg%3E") bottom/100% 100% no-repeat}
+.mcShade{position:absolute;inset:0;background:linear-gradient(0deg,rgba(6,10,14,.7),rgba(6,10,14,0) 60%)}
+.mapCard em{position:absolute;top:12px;right:12px;padding:3px 10px;border-radius:6px;background:#fff;color:#2457d6;font:700 13px "Barlow Semi Condensed",sans-serif;font-style:normal}
+.mapCard b{position:absolute;left:18px;bottom:34px;font:italic 800 clamp(30px,3vw,42px)/1 "Barlow Semi Condensed",sans-serif;color:#fff}
+.mapCard small{position:absolute;left:20px;bottom:12px;font-size:14px;font-weight:600;color:rgba(255,255,255,.85)}
+.mapCard .chg{position:absolute;right:14px;bottom:14px;padding:6px 14px;border-radius:18px;border:1px solid rgba(255,255,255,.7);font-size:14px;font-weight:700;color:#fff;background:rgba(10,14,18,.25)}
+.goBtn{position:relative;height:96px;border:0;border-radius:6px 6px 16px 16px;background:#162a44;color:#fff;display:flex;align-items:center;gap:16px;padding:0 26px;cursor:pointer;overflow:hidden;clip-path:polygon(1% 6%,100% 0,98% 100%,0 96%)}
+.goBtn::before{content:"";position:absolute;left:0;right:0;top:0;height:12px;background:radial-gradient(circle at 10px -2px,transparent 9px,#e9f3fb 10px) 0 0/20px 12px repeat-x;opacity:.9}
+.goBtn b{font:italic 800 46px "Barlow Semi Condensed",sans-serif;margin-right:auto}
+.goBtn kbd{font:700 13px "Barlow Semi Condensed",sans-serif;letter-spacing:1.5px;text-transform:uppercase;padding:5px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.4)}
+.goBtn svg{width:30px;height:30px;color:#7fc3ff}
+.goBtn:hover{background:#1d3757}
+#hmGo:focus-visible,#hmMap:focus-visible,.hmNav button:focus-visible{outline:3px solid #ff8a3d;outline-offset:3px}
+/* map select */
+#maps{z-index:3;touch-action:pan-y;cursor:grab}
+.mpShade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,9,12,.78) 0%,rgba(6,9,12,.35) 45%,rgba(6,9,12,0) 70%),linear-gradient(0deg,rgba(6,9,12,.5),rgba(6,9,12,0) 30%)}
+.back{position:absolute;top:30px;left:max(3vw,20px);height:52px;padding:0 18px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(10,14,18,.45);font:700 19px "Barlow Semi Condensed",sans-serif;color:#fff;display:flex;gap:10px;align-items:center;cursor:pointer}
+.back kbd,.mpHead kbd{font-size:12px;padding:2px 6px;border-radius:5px;border:1px solid rgba(255,255,255,.4)}
+.mpHead{position:absolute;top:30px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:12px}
+.mpHead>span{font:800 15px "Barlow Semi Condensed",sans-serif;letter-spacing:6px;text-transform:uppercase}
+#mpTabs{display:flex;gap:4px;padding:6px;border-radius:14px;background:rgba(10,14,18,.5);border:1px solid rgba(255,255,255,.15)}
+#mpTabs button{height:42px;padding:0 20px;border-radius:10px;border:0;background:none;font:800 15px "Barlow Semi Condensed",sans-serif;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.8);cursor:pointer}
+#mpTabs button.on{background:#fff;color:#13202c}
+.arrow{position:absolute;top:50%;width:68px;height:68px;margin-top:-34px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(10,14,18,.5);color:#fff;font-size:34px;cursor:pointer;display:grid;place-items:center}
+.arrow.l{left:max(2vw,14px)}.arrow.r{right:max(2vw,14px)}
+.arrow:hover{background:rgba(30,44,60,.8)}
+.mpInfo{position:absolute;left:max(8vw,100px);bottom:max(9vh,70px);width:min(58vw,640px)}
+#mpIdx{display:block;font:700 15px "Barlow Semi Condensed",sans-serif;letter-spacing:3px;margin-bottom:12px}
+#mpDiff{display:inline-block;padding:5px 14px;border-radius:7px;background:#fff;color:#2457d6;font:800 15px "Barlow Semi Condensed",sans-serif;font-style:normal;letter-spacing:2px;text-transform:uppercase}
+#mpDiff[data-d=Easy]{color:#1d8a46}#mpDiff[data-d=Hard]{color:#c8342a}
+#mpName{font:italic 800 clamp(52px,8vw,104px)/.95 "Barlow Semi Condensed",sans-serif;margin:12px 0 14px;text-wrap:balance;text-shadow:0 4px 24px rgba(0,0,0,.35)}
+#mpDesc{font-size:19px;line-height:1.45;margin:0 0 16px;max-width:52ch;color:rgba(255,255,255,.92)}
+.mpMeta{display:flex;flex-wrap:wrap;gap:8px 26px;margin:0 0 10px}
+.mpMeta div{display:flex;flex-direction:column}
+.mpMeta dt{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.65)}
+.mpMeta dd{margin:0;font-weight:700;font-size:17px}
+.mpFish{margin:0 0 22px;font-size:15px;max-width:60ch}.mpFish span{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.65);margin-right:10px}
+.btnW{height:62px;padding:0 30px;border-radius:14px;border:0;background:#fff;color:#13202c;font:800 21px "Barlow Semi Condensed",sans-serif;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.btnW:hover{transform:translateY(-2px)}
+#mpDots{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);display:flex;gap:8px}
+#mpDots button{width:44px;height:20px;border:0;padding:8px 0;background:rgba(255,255,255,.35);background-clip:content-box;cursor:pointer;transition:width .2s}#mpDots button.on{width:72px;background-color:#fff}
+.prevNote{position:absolute;right:max(3vw,20px);bottom:30px;font-size:14px;color:rgba(255,255,255,.8);opacity:0;transition:opacity .3s}
+.prevNote.on{opacity:1}
+#toast{position:fixed;left:50%;top:24px;transform:translate(-50%,-20px);z-index:9;padding:12px 20px;border-radius:12px;background:#fff;color:#13202c;font-weight:700;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.tasks{list-style:none;padding:0;margin:12px 0 20px;display:grid;gap:8px}
+.tasks li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.06)}
+.tasks li b{color:#f2c94c}.tasks li i{font-style:normal;color:var(--dim);font-size:14px}.tasks li.done{opacity:.55}
+@media (max-width:820px),(max-height:560px){
+ .logo{top:14px;left:16px}.logo b{font-size:34px}.logo span{font-size:11px;letter-spacing:2px}
+ .hmRight{top:12px;right:12px}.coins,#hmGear{height:44px}#hmGear{width:44px}
+ .badge{display:none}
+ .hmNav{top:86px;left:16px;gap:2px 10px;flex-wrap:nowrap;overflow-x:auto;right:12px}.hmNav button{font-size:15px;height:38px;flex:none}
+ .hmLeft{top:132px;left:16px;bottom:12px;width:min(52vw,380px)}
+ .brush{font-size:28px}.kick{display:none}.modes li,.modes button{font-size:22px}
+ .today{margin-top:8px;padding:8px 12px}.tdRow{grid-template-columns:80px minmax(0,1fr) auto;padding:5px 0}.tdRow b{font-size:14px}
+ .pills{display:none}
+ .hmMapBox{width:min(40vw,300px);bottom:12px;right:12px;gap:8px}.mapCard{height:120px}.mapCard b{font-size:26px;bottom:28px}.goBtn{height:70px}.goBtn b{font-size:34px}
+ .mpInfo{left:16px;bottom:56px;width:calc(100% - 32px)}#mpName{font-size:44px}#mpDesc{font-size:15px}.mpFish{display:none}
+ .arrow{width:48px;height:48px;margin-top:-24px;top:40%}.mpHead{top:12px}.back{top:12px;height:44px;font-size:15px}
+}
+@media (prefers-reduced-motion:reduce){#msg,#tackle,#catch,#pow{transition:none}}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<div id="err" hidden></div>
+
+<div id="hud" hidden>
+  <div id="info">
+    <div class="i1"><b id="clock">19:00</b><span>Day <i id="day">1</i></span></div>
+    <div class="i2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16h16M7 12a5 5 0 0 1 10 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 3v2M4.9 6.9l1.4 1.4M19.1 6.9l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span id="temp">18°C</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span id="wind">SW 1.4 m/s</span></div>
+    <div class="i3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14l-2 16H7z M5 9h14 M6 14h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span><b id="kept">0.00</b> / 25 kg keepnet</span></div>
+    <div class="i3"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 0 1 0 3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span><b id="coins">0</b> coins</span></div>
+  </div>
+  <div id="goals">
+    <button id="gHead" type="button"><span id="gTitle">Evening session</span><i id="gArrow">−</i></button>
+    <ul id="gList"></ul>
+  </div>
+  <div id="compass" aria-hidden="true"><div id="cStrip"></div><i id="cMark"></i><b></b></div>
+  <div id="topBtns"><button id="bMenu" type="button">Menu (M)</button><button id="bLog" type="button">Fish log</button><button id="bSet" type="button">Settings</button></div>
+  <div id="bait"><div class="bt"><b id="baitName">Red worms</b><span id="baitSub">Hook #6 · float 3 g</span></div>
+    <div class="bc"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 30c4-10 12 6 18-4s10-8 12-2" fill="none" stroke="#d9746a" stroke-width="5" stroke-linecap="round"/><path d="M10 30c4-10 12 6 18-4s10-8 12-2" fill="none" stroke="#f2a69b" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="1 3"/></svg><i id="baitN">30</i></div></div>
+  <div id="floatW">
+    <span id="fwLab">Ready</span>
+    <div class="fw"><div class="water"></div><i class="wl"></i>
+      <svg id="fwBob" viewBox="0 0 30 80" aria-hidden="true"><rect x="13.5" y="2" width="3" height="26" rx="1.5" fill="#ff4a1a"/><rect x="13.5" y="2" width="3" height="7" rx="1.5" fill="#ffd21a"/><path d="M15 26c7 4 8 14 8 18s-3 16-8 22c-5-6-8-18-8-22s1-14 8-18z" fill="#e8e6e0"/><path d="M15 26c7 4 8 14 8 18H7c0-4 1-14 8-18z" fill="#e23b22"/><rect x="14.3" y="64" width="1.4" height="14" fill="#444"/></svg>
+    </div>
+    <div id="stamW"><span>Fish</span><div class="sbar"><i id="stamI"></i></div></div>
+  </div>
+  <div id="tens">
+    <div class="gauges">
+      <div class="g" id="gLine"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19C9 4 15 20 19 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span id="wLine">100%</span></div>
+      <div class="g" id="gRod"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20L18 6c1-1 2-1 2 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="7" cy="17" r="1.6" fill="currentColor"/></svg><span id="wRod">100%</span></div>
+      <div class="g" id="gReel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="11" cy="12" r="2" fill="currentColor"/><path d="M17 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span id="wReel">100%</span></div>
+    </div>
+    <div class="tcol"><b id="tKg">0.0</b><div class="tbar"><i id="tFill"></i><em id="tDrag"></em></div><span>kg</span></div>
+  </div>
+  <div id="tH"><div class="hb"><i id="tHf"></i><em id="tHd"></em></div><b id="tHkg">0.0 kg</b></div>
+  <div id="slip">Drag slipping</div>
+  <div id="lineOut"><div><b id="outT">0</b><span id="capT">/ 150 m</span></div><small>Depth <i id="depT">0.0</i> m</small></div>
+  <button id="dragDial" type="button" aria-label="Drag setting"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="rgba(10,14,16,.45)" stroke="rgba(255,255,255,.18)" stroke-width="2"/><circle id="dArc" cx="32" cy="32" r="27" fill="none" stroke="#ff8a3d" stroke-width="4" stroke-linecap="round" pathLength="100" stroke-dasharray="60 100" transform="rotate(-90 32 32)"/></svg><b id="dragT">60%</b><small>drag</small></button>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div id="pow"><span>Cast power</span><div class="bar"><i id="powI"></i></div><b id="powT">0 m</b></div>
+  <div id="keys"></div>
+  <div id="touch" hidden>
+    <button id="tNet" type="button">Net</button>
+    <button id="tZoom" type="button">Zoom</button>
+    <button id="tLift" type="button">Lift</button>
+    <div class="dr"><button id="tDm" type="button" aria-label="Less drag">−</button><button id="tDp" type="button" aria-label="More drag">+</button></div>
+    <button id="tAct" type="button">Cast</button>
+  </div>
+  <div id="rotate">Turn your phone sideways to play</div>
+</div>
+
+
+<!-- ============ LOADING ============ -->
+<div id="load" class="scr on">
+  <div id="ldArt" class="art"></div><div class="ldShade"></div>
+  <div class="ldIn">
+    <span class="logoS">STILL WATER</span>
+    <span id="ldRegion" class="ldRegion">Loading</span>
+    <h1 id="ldName">Still Water</h1>
+    <p id="ldDesc"></p>
+    <p id="ldRod" class="ldRod"></p>
+    <div class="ldBarW"><i id="ldBar"></i></div>
+    <div class="ldRow"><span id="ldStep">Starting up…</span><b id="ldPct">0%</b></div>
+    <p class="ldTip"><b>Tip</b><span id="ldTip"></span></p>
+  </div>
+</div>
+
+<!-- ============ HOME ============ -->
+<div id="home" class="scr">
+  <div class="hmShadeL"></div><div class="hmShadeR"></div>
+  <div class="logo"><b>STILL WATER</b><i class="swoosh"></i><span>Lakes · Rivers · Offshore</span></div>
+  <div class="hmRight">
+    <div class="coins"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#ffb02e"/><circle cx="12" cy="12" r="6" fill="none" stroke="#c27a0a" stroke-width="1.6"/></svg><b id="hmCoins">0</b><button id="hmCoinsAdd" type="button" aria-label="Get coins">+</button></div>
+    <button id="hmGear" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.2 3.5l1.6-1.3-1.8-3.1-2 .6a7.4 7.4 0 0 0-1.6-.9L16 5.2h-3.6l-.4 2.1c-.6.2-1.1.5-1.6.9l-2-.6L6.6 10.7l1.6 1.3a7 7 0 0 0 0 1.9L6.6 15.2l1.8 3.1 2-.6c.5.4 1 .7 1.6.9l.4 2.1H16l.4-2.1c.6-.2 1.1-.5 1.6-.9l2 .6 1.8-3.1-1.6-1.3a7 7 0 0 0 0-1.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+  </div>
+  <div class="badge"><span class="av">A</span><b id="hmName">Angler</b><input id="hmNameIn" hidden maxlength="18" aria-label="Your name"><small>Click your name to change it</small></div>
+  <nav class="hmNav">
+    <button data-nav="fish" class="on" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c3-5 9-6 13-2l5-3-1 5 1 5-5-3c-4 4-10 3-13-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Fish</button>
+    <button data-nav="locker" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4l4 2 4-2 4 4-3 3v9H7v-9L4 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locker</button>
+    <button data-nav="shop" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6zM9 8a3 3 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Tackle shop</button>
+    <button data-nav="tasks" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Tasks</button>
+    <button data-nav="log" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Fish log</button>
+    <button data-nav="boards" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Leaderboards</button>
+    <button data-nav="settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 5v4M8 15v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Settings</button>
+  </nav>
+  <div class="hmLeft">
+    <h2 class="brush">Free fishing</h2>
+    <p class="kick">Cast · Wait · Strike · No time limit</p>
+    <ul class="modes">
+      <li class="on">Free fishing</li>
+      <li><button data-soon="Tournaments" type="button">Tournament <em>Soon</em></button></li>
+      <li><button data-soon="Fishing with friends" type="button">With friends <em>Soon</em></button></li>
+    </ul>
+    <div class="today">
+      <div class="tdHead"><b>Today</b><span><i class="dot"></i>Day <i id="tdDay">1</i></span></div>
+      <div class="tdRow"><span>Tasks</span><b id="tdGoals">—</b><em><i class="bar"><i id="tdGoalsBar"></i></i><span id="tdGoalsN">0/3</span></em></div>
+      <div class="tdRow"><span>Species here</span><b id="tdSpecies">—</b><em><span id="tdSpeciesN">0/0</span></em></div>
+      <div class="tdRow"><span>Best catch</span><b id="tdBest">—</b><em></em></div>
+    </div>
+    <div class="pills"><button id="hmHow" type="button">▸ How to fish</button><button id="hmControls" type="button">Controls</button><button id="hmLog" type="button">Fish log</button></div>
+  </div>
+  <div class="hmMapBox">
+    <span class="lbl">Map</span>
+    <button id="hmMap" class="mapCard" type="button">
+      <div id="hmMapArt" class="art"></div><div class="mcShade"></div>
+      <em id="hmDiff">Easy</em><b id="hmMapName">Pine Lake</b><small id="hmMapRod">Spinning rod</small><span class="chg">Change map ›</span>
+    </button>
+    <button id="hmGo" class="goBtn" type="button"><b>Fish</b><kbd>Enter</kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18L18 6M9 6h9v9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<!-- ============ MAP SELECT ============ -->
+<div id="maps" class="scr">
+  <div id="mpArt" class="art"></div>
+  <div class="mpShade"></div>
+  <button id="mpBack" class="back" type="button">← Back <kbd>Esc</kbd></button>
+  <div class="mpHead"><span>Choose map</span><div id="mpTabs"><button data-f="all" class="on" type="button">All</button><button data-f="fresh" type="button">Freshwater</button><button data-f="salt" type="button">Saltwater</button></div></div>
+  <button id="mpPrevB" class="arrow l" type="button" aria-label="Previous map">‹</button>
+  <button id="mpNextB" class="arrow r" type="button" aria-label="Next map">›</button>
+  <div class="mpInfo">
+    <span id="mpIdx">01 / 05</span>
+    <em id="mpDiff">Easy</em>
+    <h1 id="mpName">Pine Lake</h1>
+    <p id="mpDesc"></p>
+    <dl class="mpMeta"><div><dt>Rod</dt><dd id="mpRod"></dd></div><div><dt>Float</dt><dd id="mpFloat"></dd></div><div><dt>Country</dt><dd id="mpPlace"></dd></div></dl>
+    <p class="mpFish"><span>Fish here</span><b id="mpFish"></b></p>
+    <button id="mpGo" class="btnW" type="button">Select & travel →</button>
+  </div>
+  <div id="mpDots"></div>
+  <div id="mpPrev" class="prevNote">Loading preview…</div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="tasksP" class="ovl"><div class="card"><h2>Tasks</h2><p id="tasksMap"></p><ul id="tasksList" class="tasks"></ul><button class="btn ghost" data-close="tasksP" type="button">Close</button></div></div>
+<div id="howP" class="ovl"><div class="card"><h2>How to fish</h2>
+  <p>Cast out, watch the float on the right. When it says <b>Strike!</b> and the float goes under, click. Then fight the fish on your drag and net it when it tires.</p>
+  <div class="ctl">
+    <kbd>Hold left click</kbd><span>charge, release to cast</span>
+    <kbd>Mouse</kbd><span>look and aim</span>
+    <kbd>Click</kbd><span>strike when the float goes under</span>
+    <kbd>Hold left click</kbd><span>reel in</span>
+    <kbd>Right click</kbd><span>lift the rod to tire the fish</span>
+    <kbd>Wheel · Q / E</kbd><span>set the drag; too tight and the line snaps</span>
+    <kbd>N</kbd><span>scoop the fish with the landing net</span>
+    <kbd>Shift</kbd><span>zoom on the float</span>
+    <kbd>K · X</kbd><span>keep or release your catch</span>
+    <kbd>M</kbd><span>back to the menu</span>
+  </div>
+  <button class="btn ghost" data-close="howP" type="button">Got it</button></div></div>
+<div id="catch" class="glass" role="dialog" aria-label="Catch">
+  <span class="tag" id="cTag">Landed</span>
+  <div id="cName">Fish</div>
+  <div class="stats"><div><span>Weight</span><b id="cKg">0</b></div><div><span>Length</span><b id="cLen">0</b></div><div><span>Value</span><b id="cVal">0</b></div></div>
+  <div id="cHint"></div>
+  <div class="acts"><button class="btn" id="bKeep" type="button">Keep (K)</button><button class="btn ghost" id="bRel" type="button">Release (X)</button></div>
+</div>
+
+<div id="logP" class="ovl"><div class="card"><h2>Fish log</h2><p id="logSum"></p><div id="logGrid"></div><button class="btn ghost" data-close="logP" type="button">Back to the lake</button></div></div>
+<div id="setP" class="ovl"><div class="card"><h2>Settings</h2>
+  <div class="set">
+    <label>Time of day (dusk to afternoon)<input id="sTod" type="range" min="0" max="100"></label>
+    <label>Cloud cover<input id="sCloud" type="range" min="0" max="100"></label>
+    <label>Volume<input id="sVol" type="range" min="0" max="100"></label>
+    <label>Look sensitivity<input id="sSens" type="range" min="30" max="250"></label>
+    <button class="btn ghost" id="bRepair" type="button">Repair tackle (25 coins)</button>
+    <label>Rod hand<select id="sHand"><option value="goofy">Goofy: rod in left hand, wind with right</option><option value="normal">Normal: rod in right hand, wind with left</option></select></label>
+    <label>Graphics quality<select id="sQual"><option value="high">High (anti-aliasing, more trees)</option><option value="low">Low (faster)</option></select></label>
+    <span id="qNote" hidden>Tree density changes after a reload.</span>
+  </div>
+  <button class="btn ghost" data-close="setP" type="button">Done</button></div></div>
+
+<script src="js/core.js?v=11"></script>
+<script src="js/shaders.js?v=11"></script>
+<script src="js/world.js?v=11"></script>
+<script src="js/fish.js?v=11"></script>
+<script src="js/maps.js?v=11"></script>
+<script src="js/character.js?v=11"></script>
+<script src="js/rig.js?v=11"></script>
+<script src="js/audio.js?v=11"></script>
+<script src="js/main.js?v=11"></script>
+</body></html>
